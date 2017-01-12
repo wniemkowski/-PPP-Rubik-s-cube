@@ -1,92 +1,80 @@
-from panda3d.core import GeomVertexFormat, GeomVertexData
+from panda3d.core import GeomVertexFormat, GeomVertexData, VBase3
 from panda3d.core import Geom, GeomTriangles, GeomVertexWriter
-from panda3d.core import Texture, GeomNode
-from panda3d.core import LVector3
+from panda3d.core import GeomNode
 
-RED = (1,0,0,0)
-GREEN = (0,1,0,0)
-BLUE = (0,0,1,0)
-ORANGE = (1,165.0/255,0,0)
-YELLOW = (1,1,0,0)
-WHITE = (1,1,1,0)
+def createCube(parent, index, cubeMembership, walls):
 
-def normalized(*args):
-    myVec = LVector3(*args)
-    myVec.normalize()
-    return myVec
+    vertexFormat = GeomVertexFormat.getV3n3cp()
+    vertexData = GeomVertexData("cube_data", vertexFormat, Geom.UHStatic)
+    tris = GeomTriangles(Geom.UHStatic)
 
-def makeSquare(x1, y1, z1, x2, y2, z2, wallColor):
-    format = GeomVertexFormat.getV3n3cpt2()
-    vdata = GeomVertexData('square', format, Geom.UHDynamic)
+    posWriter = GeomVertexWriter(vertexData, "vertex")
+    colWriter = GeomVertexWriter(vertexData, "color")
+    normalWriter = GeomVertexWriter(vertexData, "normal")
 
-    vertex = GeomVertexWriter(vdata, 'vertex')
-    normal = GeomVertexWriter(vdata, 'normal')
-    color = GeomVertexWriter(vdata, 'color')
-    texcoord = GeomVertexWriter(vdata, 'texcoord')
+    vertexCount = 0
 
-    # make sure we draw the sqaure in the right plane
-    if x1 != x2:
-        vertex.addData3(x1, y1, z1)
-        vertex.addData3(x2, y1, z1)
-        vertex.addData3(x2, y2, z2)
-        vertex.addData3(x1, y2, z2)
+    for direction in (-1, 1):
 
-        normal.addData3(normalized(2 * x1 - 1, 2 * y1 - 1, 2 * z1 - 1))
-        normal.addData3(normalized(2 * x2 - 1, 2 * y1 - 1, 2 * z1 - 1))
-        normal.addData3(normalized(2 * x2 - 1, 2 * y2 - 1, 2 * z2 - 1))
-        normal.addData3(normalized(2 * x1 - 1, 2 * y2 - 1, 2 * z2 - 1))
+        for i in range(3):
 
-    else:
-        vertex.addData3(x1, y1, z1)
-        vertex.addData3(x2, y2, z1)
-        vertex.addData3(x2, y2, z2)
-        vertex.addData3(x1, y1, z2)
+            normal = VBase3()
+            normal[i] = direction
+            rgb = [0., 0., 0.]
+            rgb[i] = 1.
 
-        normal.addData3(normalized(2 * x1 - 1, 2 * y1 - 1, 2 * z1 - 1))
-        normal.addData3(normalized(2 * x2 - 1, 2 * y2 - 1, 2 * z1 - 1))
-        normal.addData3(normalized(2 * x2 - 1, 2 * y2 - 1, 2 * z2 - 1))
-        normal.addData3(normalized(2 * x1 - 1, 2 * y1 - 1, 2 * z2 - 1))
+            if direction == 1:
+                rgb[i-1] = 1.
 
-    # adding different colors to the vertex for visibility
-    for i in range(0,4):
-        color.addData4f(wallColor)
+            r, g, b = rgb
+            color = (r, g, b, 0.)
 
-    texcoord.addData2f(0.0, 1.0)
-    texcoord.addData2f(0.0, 0.0)
-    texcoord.addData2f(1.0, 0.0)
-    texcoord.addData2f(1.0, 1.0)
+            for a, b in ( (-1., -1.), (-1., 1.), (1., 1.), (1., -1.) ):
 
-    # Quads aren't directly supported by the Geom interface
-    # you might be interested in the CardMaker class if you are
-    # interested in rectangle though
-    tris = GeomTriangles(Geom.UHDynamic)
-    tris.addVertices(0, 1, 3)
-    tris.addVertices(1, 2, 3)
+                pos = VBase3()
+                pos[i] = direction
+                pos[(i + direction) % 3] = a
+                pos[(i + direction * 2) % 3] = b
 
-    square = Geom(vdata)
-    square.addPrimitive(tris)
-    return square
+                posWriter.addData3f(pos)
+                colWriter.addData4f(color)
+                normalWriter.addData3f(normal)
 
-def CreateCube():
-    # Note: it isn't particularly efficient to make every face as a separate Geom.
-    # instead, it would be better to create one Geom holding all of the faces.
-    square0 = makeSquare(-1, -1, -1, 1, -1, 1,RED)
-    square1 = makeSquare(-1, 1, -1, 1, 1, 1,GREEN)
-    square2 = makeSquare(-1, 1, 1, 1, -1, 1,BLUE)
-    square3 = makeSquare(-1, 1, -1, 1, -1, -1,ORANGE)
-    square4 = makeSquare(-1, -1, -1, -1, 1, 1,WHITE)
-    square5 = makeSquare(1, -1, -1, 1, 1, 1,YELLOW)
-    snode = GeomNode('square')
-    snode.addGeom(square0)
-    snode.addGeom(square1)
-    snode.addGeom(square2)
-    snode.addGeom(square3)
-    snode.addGeom(square4)
-    snode.addGeom(square5)
+            vertexCount += 4
 
-    cube = render.attachNewNode(snode)
+            tris.addVertices(vertexCount - 2, vertexCount - 3, vertexCount - 4)
+            tris.addVertices(vertexCount - 4, vertexCount - 1, vertexCount - 2)
 
-    # OpenGl by default only draws "front faces" (polygons whose vertices are
-    # specified CCW).
-    cube.setTwoSided(True)
+    geom = Geom(vertexData)
+    geom.addPrimitive(tris)
+    node = GeomNode("cube_node")
+    node.addGeom(geom)
+    cube = parent.attachNewNode(node)
+    x = index % 9 // 3 - 1
+    y = index // 9 - 1
+    z = index % 9 % 3 - 1
+    cube.setScale(.4)
+    cube.setPos(x * 0.85, y * 0.85, z * 0.85)
+    membership = set() # the walls this cube belongs to
+    cubeMembership[cube] = membership
+
+    if x == -1:
+        walls["left"].append(cube)
+        membership.add("left")
+    elif x == 1:
+        walls["right"].append(cube)
+        membership.add("right")
+    if y == -1:
+        walls["front"].append(cube)
+        membership.add("front")
+    elif y == 1:
+        walls["back"].append(cube)
+        membership.add("back")
+    if z == -1:
+        walls["bottom"].append(cube)
+        membership.add("bottom")
+    elif z == 1:
+        walls["top"].append(cube)
+        membership.add("top")
+
     return cube
